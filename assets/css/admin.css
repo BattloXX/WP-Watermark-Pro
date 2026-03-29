@@ -1,0 +1,633 @@
+/* ============================================================
+   Watermark Pro – Admin Styles
+   ============================================================ */
+
+/* Wrap */
+.wm-pro-wrap {
+    margin: 20px 20px 40px 0;
+    max-width: 1400px;
+}
+
+.wm-pro-title {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    margin-bottom: 24px;
+    font-size: 23px;
+    font-weight: 400;
+}
+
+.wm-pro-title .dashicons {
+    color: #2271b1;
+    font-size: 28px;
+    width: 28px;
+    height: 28px;
+    margin-top: -2px;
+}
+
+/* ============================================================
+   Tabs
+   ============================================================ */
+.wm-tab-nav {
+    display: flex;
+    border-bottom: 2px solid #c3c4c7;
+    margin-bottom: 24px;
+    gap: 0;
+}
+
+.wm-tab-btn {
+    background: none;
+    border: none;
+    border-bottom: 3px solid transparent;
+    margin-bottom: -2px;
+    padding: 10px 22px;
+    font-size: 14px;
+    font-weight: 600;
+    color: #646970;
+    cursor: pointer;
+    transition: color .15s, border-color .15s;
+    letter-spacing: 0.01em;
+}
+
+.wm-tab-btn:hover {
+    color: #1d2327;
+}
+
+.wm-tab-btn.active {
+    color: #2271b1;
+    border-bottom-color: #2271b1;
+}
+
+.wm-tab-panel {
+    display: none;
+}
+
+.wm-tab-panel.active {
+    display: block;
+}
+
+/* ============================================================
+   3-column layout
+   ============================================================ */
+.wm-layout {
+    display: grid;
+    grid-template-columns: 250px 300px 1fr;
+    gap: 20px;
+    align-items: start;
+}
+
+@media (max-width: 1260px) {
+    .wm-layout {
+        grid-template-columns: 240px 1fr;
+    }
+    .wm-col-preview {
+        grid-column: span 2;
+    }
+}
+
+@media (max-width: 780px) {
+    .wm-layout {
+        grid-template-columns: 1fr;
+    }
+    .wm-col-preview {
+        grid-column: 1;
+    }
+}
+
+.wm-col-selection {
+    display: flex;
+    flex-direction: column;
+    gap: 16px;
+}
+
+/* ============================================================
+   Box card
+   ============================================================ */
+.wm-box {
+    background: #fff;
+    border: 1px solid #c3c4c7;
+    border-radius: 4px;
+    padding: 18px 20px;
+    box-shadow: 0 1px 1px rgba(0,0,0,.04);
+}
+
+.wm-box h3 {
+    margin: 0 0 14px;
+    padding-bottom: 10px;
+    font-size: 11px;
+    font-weight: 700;
+    text-transform: uppercase;
+    letter-spacing: .06em;
+    color: #646970;
+    border-bottom: 1px solid #f0f0f1;
+}
+
+/* ============================================================
+   Form fields
+   ============================================================ */
+.wm-field {
+    margin-bottom: 16px;
+}
+
+.wm-field:last-child {
+    margin-bottom: 0;
+}
+
+.wm-field label {
+    display: block;
+    font-weight: 600;
+    font-size: 13px;
+    margin-bottom: 6px;
+    color: #1d2327;
+}
+
+.wm-hint {
+    color: #646970;
+    font-size: 12px;
+    margin: 4px 0 0;
+}
+
+.wm-hint-inline {
+    font-weight: 400;
+    color: #646970;
+    font-size: 12px;
+}
+
+.wm-row {
+    display: flex;
+    gap: 8px;
+    align-items: center;
+}
+
+/* ============================================================
+   Image thumbnails
+   ============================================================ */
+.wm-thumb-grid {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 8px;
+    margin-bottom: 12px;
+    min-height: 50px;
+}
+
+.wm-thumb-item {
+    position: relative;
+    width: 64px;
+    height: 64px;
+    flex-shrink: 0;
+}
+
+.wm-thumb-item img {
+    width: 64px;
+    height: 64px;
+    object-fit: cover;
+    border-radius: 4px;
+    border: 2px solid #2271b1;
+    display: block;
+}
+
+.wm-remove-img {
+    position: absolute;
+    top: -7px;
+    right: -7px;
+    width: 20px;
+    height: 20px;
+    border-radius: 50%;
+    background: #d63638;
+    color: #fff;
+    border: 2px solid #fff;
+    cursor: pointer;
+    font-size: 12px;
+    line-height: 16px;
+    text-align: center;
+    padding: 0;
+    font-weight: 700;
+    box-shadow: 0 1px 3px rgba(0,0,0,.3);
+}
+
+.wm-remove-img:hover {
+    background: #b32d2e;
+}
+
+/* Watermark thumb */
+.wm-watermark-thumb {
+    margin-bottom: 10px;
+    min-height: 40px;
+}
+
+.wm-watermark-thumb img {
+    max-width: 100%;
+    max-height: 90px;
+    object-fit: contain;
+    border-radius: 3px;
+    border: 1px solid #c3c4c7;
+    /* checkerboard background to show transparency */
+    background-color: #fff;
+    background-image:
+        linear-gradient(45deg, #e0e0e0 25%, transparent 25%),
+        linear-gradient(-45deg, #e0e0e0 25%, transparent 25%),
+        linear-gradient(45deg, transparent 75%, #e0e0e0 75%),
+        linear-gradient(-45deg, transparent 75%, #e0e0e0 75%);
+    background-size: 10px 10px;
+    background-position: 0 0, 0 5px, 5px -5px, -5px 0px;
+    padding: 4px;
+    display: block;
+}
+
+.wm-watermark-thumb p {
+    margin: 4px 0 0;
+    font-size: 12px;
+    color: #646970;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+}
+
+/* Select buttons */
+.wm-btn-select {
+    display: inline-flex;
+    align-items: center;
+    gap: 5px;
+}
+
+/* ============================================================
+   Position grid
+   ============================================================ */
+.wm-position-grid {
+    display: grid;
+    grid-template-columns: repeat(3, 40px);
+    gap: 5px;
+    margin-bottom: 4px;
+}
+
+.wm-pos-btn {
+    width: 40px;
+    height: 40px;
+    background: #f6f7f7;
+    border: 2px solid #c3c4c7;
+    border-radius: 5px;
+    cursor: pointer;
+    font-size: 17px;
+    line-height: 1;
+    color: #50575e;
+    transition: background .12s, border-color .12s, color .12s;
+    padding: 0;
+}
+
+.wm-pos-btn:hover {
+    background: #e5eef7;
+    border-color: #2271b1;
+    color: #2271b1;
+}
+
+.wm-pos-btn.active {
+    background: #2271b1;
+    border-color: #135e96;
+    color: #fff;
+    box-shadow: inset 0 1px 3px rgba(0,0,0,.2);
+}
+
+/* ============================================================
+   Offset row
+   ============================================================ */
+.wm-offset-row {
+    gap: 18px;
+}
+
+.wm-offset-field {
+    display: flex;
+    align-items: center;
+    gap: 5px;
+}
+
+.wm-offset-label {
+    font-weight: 700;
+    font-size: 12px;
+    color: #646970;
+    min-width: 14px;
+}
+
+.wm-unit {
+    font-size: 12px;
+    color: #646970;
+}
+
+/* ============================================================
+   Sliders
+   ============================================================ */
+.wm-slider {
+    display: block;
+    width: 100%;
+    margin-top: 4px;
+    accent-color: #2271b1;
+    cursor: pointer;
+}
+
+/* ============================================================
+   Divider
+   ============================================================ */
+.wm-divider {
+    border: none;
+    border-top: 1px solid #f0f0f1;
+    margin: 18px 0;
+}
+
+/* ============================================================
+   Canvas preview
+   ============================================================ */
+.wm-canvas-wrap {
+    position: relative;
+    width: 100%;
+    aspect-ratio: 4 / 3;
+    background: #1d2327;
+    border-radius: 4px;
+    overflow: hidden;
+}
+
+#wm-canvas {
+    display: block;
+    width: 100%;
+    height: 100%;
+}
+
+.wm-canvas-placeholder {
+    position: absolute;
+    inset: 0;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    color: #6b7177;
+    gap: 10px;
+    pointer-events: none;
+    background: #1d2327;
+}
+
+.wm-canvas-placeholder .dashicons {
+    font-size: 52px;
+    width: 52px;
+    height: 52px;
+    opacity: .35;
+}
+
+.wm-canvas-placeholder p {
+    margin: 0;
+    font-size: 13px;
+    opacity: .7;
+}
+
+.wm-canvas-placeholder.hidden {
+    display: none;
+}
+
+/* ============================================================
+   Apply bar
+   ============================================================ */
+.wm-apply-bar {
+    display: flex;
+    align-items: center;
+    gap: 20px;
+    flex-wrap: wrap;
+    margin-top: 22px;
+    padding: 16px 20px;
+    background: #fff;
+    border: 1px solid #c3c4c7;
+    border-radius: 4px;
+    box-shadow: 0 1px 1px rgba(0,0,0,.04);
+}
+
+#wm-btn-apply {
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    font-size: 14px !important;
+    padding: 8px 20px !important;
+    height: auto !important;
+}
+
+#wm-btn-apply .dashicons {
+    font-size: 18px;
+    width: 18px;
+    height: 18px;
+}
+
+/* Progress */
+.wm-progress-bar-outer {
+    width: 220px;
+    height: 8px;
+    background: #f0f0f1;
+    border-radius: 4px;
+    overflow: hidden;
+}
+
+.wm-progress-bar-inner {
+    height: 100%;
+    background: #2271b1;
+    border-radius: 4px;
+    transition: width .25s ease;
+}
+
+.wm-progress-text {
+    font-size: 12px;
+    color: #646970;
+}
+
+/* Results */
+.wm-apply-result {
+    font-size: 13px;
+    line-height: 1.6;
+}
+
+.wm-apply-result .wm-success {
+    color: #00a32a;
+}
+
+.wm-apply-result .wm-success a {
+    color: #007017;
+    text-decoration: underline;
+}
+
+.wm-apply-result .wm-error {
+    color: #d63638;
+}
+
+.wm-apply-result .wm-error ul {
+    margin: 4px 0 0 16px;
+    list-style: disc;
+}
+
+/* Inline messages */
+.wm-inline-msg {
+    font-size: 12px;
+    margin-top: 5px;
+    min-height: 16px;
+}
+
+.wm-inline-msg.success { color: #00a32a; }
+.wm-inline-msg.error   { color: #d63638; }
+
+/* ============================================================
+   Templates table
+   ============================================================ */
+.wm-templates-table {
+    width: 100%;
+    border-collapse: collapse;
+    font-size: 13px;
+}
+
+.wm-templates-table th,
+.wm-templates-table td {
+    text-align: left;
+    padding: 10px 14px;
+    border-bottom: 1px solid #f0f0f1;
+    vertical-align: middle;
+}
+
+.wm-templates-table th {
+    background: #f6f7f7;
+    font-weight: 700;
+    color: #646970;
+    font-size: 11px;
+    text-transform: uppercase;
+    letter-spacing: .05em;
+    white-space: nowrap;
+}
+
+.wm-templates-table tr:last-child td {
+    border-bottom: none;
+}
+
+.wm-templates-table tr:hover td {
+    background: #f9f9f9;
+}
+
+.wm-tpl-thumb {
+    width: 44px;
+    height: 44px;
+    object-fit: contain;
+    border-radius: 3px;
+    background-color: #fff;
+    background-image:
+        linear-gradient(45deg, #e0e0e0 25%, transparent 25%),
+        linear-gradient(-45deg, #e0e0e0 25%, transparent 25%),
+        linear-gradient(45deg, transparent 75%, #e0e0e0 75%),
+        linear-gradient(-45deg, transparent 75%, #e0e0e0 75%);
+    background-size: 8px 8px;
+    background-position: 0 0, 0 4px, 4px -4px, -4px 0px;
+    border: 1px solid #c3c4c7;
+    padding: 2px;
+    display: block;
+}
+
+.wm-badge {
+    display: inline-block;
+    background: #e5eef7;
+    border-radius: 3px;
+    padding: 2px 7px;
+    font-size: 11px;
+    font-weight: 600;
+    color: #2271b1;
+    white-space: nowrap;
+}
+
+.wm-tpl-actions {
+    display: flex;
+    gap: 6px;
+    flex-wrap: nowrap;
+}
+
+/* Misc */
+.wm-loading {
+    color: #646970;
+    font-style: italic;
+}
+
+.wm-no-templates {
+    color: #646970;
+    font-style: italic;
+}
+
+/* ============================================================
+   Text watermark & extended controls (v1.1.0)
+   ============================================================ */
+
+/* Toggle label (checkbox + text inline) */
+.wm-toggle-label {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    cursor: pointer;
+    font-weight: 600;
+    font-size: 13px;
+}
+
+.wm-toggle-label input[type="checkbox"] {
+    margin: 0;
+    width: 16px;
+    height: 16px;
+    cursor: pointer;
+    accent-color: #2271b1;
+}
+
+/* Section label (light subheading inside a box) */
+.wm-section-label {
+    font-size: 11px;
+    font-weight: 700;
+    text-transform: uppercase;
+    letter-spacing: .05em;
+    color: #2271b1;
+    margin: 0 0 10px;
+}
+
+/* Alignment buttons (L / C / R) */
+.wm-align-btns {
+    display: flex;
+    gap: 4px;
+}
+
+.wm-align-btn {
+    width: 40px;
+    height: 34px;
+    background: #f6f7f7;
+    border: 2px solid #c3c4c7;
+    border-radius: 4px;
+    cursor: pointer;
+    font-size: 18px;
+    line-height: 1;
+    color: #50575e;
+    transition: background .12s, border-color .12s, color .12s;
+    padding: 0;
+}
+
+.wm-align-btn:hover {
+    background: #e5eef7;
+    border-color: #2271b1;
+    color: #2271b1;
+}
+
+.wm-align-btn.active {
+    background: #2271b1;
+    border-color: #135e96;
+    color: #fff;
+}
+
+/* Text color + opacity row */
+#wm-text-opacity {
+    flex: 1;
+}
+
+/* Templates table – text column badge */
+.wm-text-badge {
+    display: inline-block;
+    background: #f0f6fc;
+    border-radius: 3px;
+    padding: 2px 6px;
+    font-size: 11px;
+    font-weight: 600;
+    color: #0a3966;
+    max-width: 140px;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+    vertical-align: middle;
+}
