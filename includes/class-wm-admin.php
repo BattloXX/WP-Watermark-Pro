@@ -88,7 +88,7 @@ class WM_Admin {
         return $mimes;
     }
 
-    public function fix_eps_filetype( array $data, string $file, string $filename, array $mimes ): array {
+    public function fix_eps_filetype( array $data, string $file, string $filename, ?array $mimes ): array {
         if ( empty( $data['type'] ) && strtolower( pathinfo( $filename, PATHINFO_EXTENSION ) ) === 'eps' ) {
             $data['ext']  = 'eps';
             $data['type'] = 'application/postscript';
