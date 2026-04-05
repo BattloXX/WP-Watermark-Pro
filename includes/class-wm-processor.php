@@ -159,7 +159,7 @@ class WM_Processor {
                 imagedestroy( $base );
                 return new WP_Error(
                     'ttf_failed',
-                    __( 'imagettftext() schlug fehl. Font-Pfad:', 'watermark-pro' ) . ' ' . $font
+                    __( 'GD konnte die Font-Datei nicht lesen (imagettfbbox/imagettftext fehlgeschlagen). Pfad:', 'watermark-pro' ) . ' ' . $font
                 );
             }
         }
@@ -279,15 +279,23 @@ class WM_Processor {
         if ( $is_edge_left  ) { $angle = 90;  }
         if ( $is_edge_right ) { $angle = 270; }
 
-        // Measure text
+        // Measure text – wrap in error handler; false means GD cannot read the font
+        set_error_handler( static function() {} );
         $bbox  = imagettfbbox( $size, $angle, $font, $text );
+        $bbox0 = imagettfbbox( $size, 0,      $font, $text );
+        restore_error_handler();
+
+        if ( $bbox === false || $bbox0 === false ) {
+            error_log( 'WM_Processor: imagettfbbox() failed — font: ' . $font );
+            return false;
+        }
+
         $text_w = abs( $bbox[4] - $bbox[0] ); // axis-aligned width
         $text_h = abs( $bbox[5] - $bbox[1] ); // axis-aligned height
 
-        // Measure at angle=0 for line-height (used to offset flush to edge)
-        $bbox0   = imagettfbbox( $size, 0, $font, $text );
-        $line_h  = abs( $bbox0[7] - $bbox0[1] ); // visual line height
-        $ascent  = abs( $bbox0[7] );              // distance from top of box to baseline
+        // line-height and ascent for edge-flush placement
+        $line_h  = abs( $bbox0[7] - $bbox0[1] );
+        $ascent  = abs( $bbox0[7] );
 
         if ( $is_edge_left ) {
             // Text runs vertically (bottom→top). text_w = string length in px; text_h = line height.
@@ -415,21 +423,36 @@ class WM_Processor {
         $font_dir    = $upload_dir['basedir'] . '/wm-fonts';
         $cached_path = $font_dir . '/' . $filename;
 
-        if ( file_exists( $cached_path ) ) {
-            return $cached_path;
+        // Re-copy if cached file is missing or suspiciously small (< 1 KB)
+        $needs_copy = ! file_exists( $cached_path ) || filesize( $cached_path ) < 1024;
+
+        if ( $needs_copy ) {
+            if ( ! wp_mkdir_p( $font_dir ) ) {
+                return false;
+            }
+
+            // Block direct web access to the font directory
+            $htaccess = $font_dir . '/.htaccess';
+            if ( ! file_exists( $htaccess ) ) {
+                file_put_contents( $htaccess, "Deny from all\n" );
+            }
+
+            if ( ! @copy( $src_path, $cached_path ) || filesize( $cached_path ) < 1024 ) {
+                error_log( 'WM_Processor: failed to copy font to uploads: ' . $cached_path );
+                return false;
+            }
+
+            // Ensure the web server can read the file
+            @chmod( $cached_path, 0644 );
         }
 
-        if ( ! wp_mkdir_p( $font_dir ) ) {
-            return false;
-        }
+        // Quick readability test: imagettfbbox() must succeed with this font
+        set_error_handler( static function() {} );
+        $test = @imagettfbbox( 12, 0, $cached_path, 'x' );
+        restore_error_handler();
 
-        // Block web access to the fonts directory
-        $htaccess = $font_dir . '/.htaccess';
-        if ( ! file_exists( $htaccess ) ) {
-            file_put_contents( $htaccess, "Deny from all\n" );
-        }
-
-        if ( ! @copy( $src_path, $cached_path ) ) {
+        if ( $test === false ) {
+            error_log( 'WM_Processor: imagettfbbox() failed for cached font: ' . $cached_path );
             return false;
         }
 
