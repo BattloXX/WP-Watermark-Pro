@@ -154,7 +154,14 @@ class WM_Processor {
                     __( 'Kein TTF-Font gefunden. Text-Wasserzeichen konnte nicht gerendert werden.', 'watermark-pro' )
                 );
             }
-            $this->apply_text_watermark( $base, $base_w, $base_h, $settings );
+            $text_ok = $this->apply_text_watermark( $base, $base_w, $base_h, $settings );
+            if ( ! $text_ok ) {
+                imagedestroy( $base );
+                return new WP_Error(
+                    'ttf_failed',
+                    __( 'imagettftext() schlug fehl. Font-Pfad:', 'watermark-pro' ) . ' ' . $font
+                );
+            }
         }
 
         // ---- Save ----
@@ -236,14 +243,14 @@ class WM_Processor {
      *   edge-left / edge-right → along-edge alignment:
      *     left = start near image top, right = start near image bottom.
      */
-    private function apply_text_watermark( $base, int $bw, int $bh, array $s ): void {
+    private function apply_text_watermark( $base, int $bw, int $bh, array $s ): bool {
         $font = $this->resolve_font(
             $s['text_font_family'] ?? 'auto',
             $s['text_font_path']   ?? ''
         );
 
         if ( ! $font || ! function_exists( 'imagettftext' ) ) {
-            return; // No TTF support – skip silently
+            return false;
         }
 
         $size    = max( 8, (int) ( $s['text_font_size'] ?? 36 ) );
@@ -337,7 +344,18 @@ class WM_Processor {
             $draw_y = $py - $bbox[7];
         }
 
-        imagettftext( $base, $size, $angle, $draw_x, $draw_y, $color, $font, $text );
+        // Suppress PHP warnings, check return value – imagettftext() returns false
+        // if the font cannot be read (e.g. open_basedir restriction).
+        set_error_handler( static function() {} );
+        $result = imagettftext( $base, $size, $angle, $draw_x, $draw_y, $color, $font, $text );
+        restore_error_handler();
+
+        if ( $result === false ) {
+            error_log( 'WM_Processor: imagettftext() failed — font: ' . $font );
+            return false;
+        }
+
+        return true;
     }
 
     // =========================================================================
@@ -354,7 +372,11 @@ class WM_Processor {
         $plugin_font = defined( 'WM_DIR' ) ? WM_DIR . 'fonts/DejaVuSans.ttf' : '';
         if ( $plugin_font && file_exists( $plugin_font ) ) {
             if ( $family === 'auto' || $family === 'dejavu' ) {
-                return $plugin_font;
+                // open_basedir workaround: imagettftext() may be blocked from reading
+                // files in the plugin directory even though file_exists() returns true.
+                // Copying the font to the uploads dir (which is always allowed) fixes this.
+                $resolved = $this->ensure_font_in_uploads( $plugin_font, 'DejaVuSans.ttf' );
+                return $resolved ?: $plugin_font;
             }
         }
 
@@ -380,6 +402,38 @@ class WM_Processor {
             if ( file_exists( $path ) ) { return $path; }
         }
         return false;
+    }
+
+    /**
+     * Copy a font file to the uploads directory so imagettftext() can read it
+     * even under open_basedir restrictions that block the plugin directory.
+     *
+     * Returns the uploads-dir path on success, or false if the copy failed.
+     */
+    private function ensure_font_in_uploads( string $src_path, string $filename ): string|false {
+        $upload_dir  = wp_upload_dir();
+        $font_dir    = $upload_dir['basedir'] . '/wm-fonts';
+        $cached_path = $font_dir . '/' . $filename;
+
+        if ( file_exists( $cached_path ) ) {
+            return $cached_path;
+        }
+
+        if ( ! wp_mkdir_p( $font_dir ) ) {
+            return false;
+        }
+
+        // Block web access to the fonts directory
+        $htaccess = $font_dir . '/.htaccess';
+        if ( ! file_exists( $htaccess ) ) {
+            file_put_contents( $htaccess, "Deny from all\n" );
+        }
+
+        if ( ! @copy( $src_path, $cached_path ) ) {
+            return false;
+        }
+
+        return $cached_path;
     }
 
     // =========================================================================

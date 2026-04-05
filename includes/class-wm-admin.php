@@ -22,7 +22,7 @@ class WM_Admin {
         add_filter( 'upload_mimes',              [ $this, 'allow_extra_mimes'  ] );
         add_filter( 'wp_check_filetype_and_ext', [ $this, 'fix_eps_filetype'  ], 10, 4 );
 
-        $ajax_actions = [ 'apply', 'save_template', 'get_templates', 'get_template', 'delete_template' ];
+        $ajax_actions = [ 'apply', 'save_template', 'get_templates', 'get_template', 'delete_template', 'debug_font' ];
         foreach ( $ajax_actions as $action ) {
             add_action( "wp_ajax_wm_{$action}", [ $this, "ajax_{$action}" ] );
         }
@@ -218,6 +218,41 @@ class WM_Admin {
         if ( ! current_user_can( 'upload_files' ) ) { wp_send_json_error(); }
         WM_Templates::delete( absint( $_POST['id'] ?? 0 ) );
         wp_send_json_success( [ 'templates' => $this->templates_for_js() ] );
+    }
+
+    // -------------------------------------------------------------------------
+    // AJAX – font diagnostics
+    // -------------------------------------------------------------------------
+
+    public function ajax_debug_font(): void {
+        $this->verify_nonce();
+        if ( ! current_user_can( 'manage_options' ) ) { wp_send_json_error( [ 'message' => 'Forbidden' ], 403 ); }
+
+        $upload_dir  = wp_upload_dir();
+        $plugin_font = WM_DIR . 'fonts/DejaVuSans.ttf';
+        $cached_font = $upload_dir['basedir'] . '/wm-fonts/DejaVuSans.ttf';
+
+        $test_bbox = static function ( string $path ): array|false|string {
+            if ( ! file_exists( $path ) ) { return 'file_not_found'; }
+            set_error_handler( static function() {} );
+            $r = @imagettfbbox( 24, 0, $path, 'Test' );
+            restore_error_handler();
+            return $r; // false = GD could not read font
+        };
+
+        wp_send_json_success( [
+            'open_basedir'        => ini_get( 'open_basedir' ) ?: '(not set)',
+            'wm_dir'              => WM_DIR,
+            'plugin_font_path'    => $plugin_font,
+            'plugin_font_exists'  => file_exists( $plugin_font ),
+            'plugin_font_bbox'    => $test_bbox( $plugin_font ),
+            'cached_font_path'    => $cached_font,
+            'cached_font_exists'  => file_exists( $cached_font ),
+            'cached_font_bbox'    => $test_bbox( $cached_font ),
+            'imagettftext_exists' => function_exists( 'imagettftext' ),
+            'gd_freetype'         => ( gd_info()['FreeType Support'] ?? false ),
+            'available_fonts'     => WM_Processor::detect_available_fonts(),
+        ] );
     }
 
     // -------------------------------------------------------------------------
