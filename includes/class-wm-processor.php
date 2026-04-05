@@ -108,7 +108,10 @@ class WM_Processor {
                 return new WP_Error( 'load_wm_fail', $hint );
             }
 
-            imagealphablending( $wm, true );
+            // Keep raw alpha values from the source (critical for indexed PNGs
+            // with tRNS transparency – blending=true would pre-composite against
+            // the black GD background and destroy semi-transparent pixels).
+            imagealphablending( $wm, false );
             imagesavealpha( $wm, true );
 
             $wm_ow = imagesx( $wm );
@@ -185,6 +188,39 @@ class WM_Processor {
         }
 
         return $this->register_attachment( $out_path, $image_id );
+    }
+
+    /**
+     * Test whether GD's FreeType support actually works by calling imagettfbbox()
+     * with the bundled font. Returns the working font path, or false.
+     */
+    public static function test_freetype(): string|false {
+        static $cached = null;
+        if ( $cached !== null ) { return $cached; }
+
+        if ( ! function_exists( 'imagettfbbox' ) ) { return $cached = false; }
+
+        $plugin_font = defined( 'WM_DIR' ) ? WM_DIR . 'fonts/DejaVuSans.ttf' : '';
+        $upload_dir  = wp_upload_dir();
+        $cached_font = $upload_dir['basedir'] . '/wm-fonts/DejaVuSans.ttf';
+
+        // Ensure uploads copy exists
+        if ( $plugin_font && file_exists( $plugin_font ) && ! file_exists( $cached_font ) ) {
+            wp_mkdir_p( dirname( $cached_font ) );
+            @copy( $plugin_font, $cached_font );
+            @chmod( $cached_font, 0644 );
+            $htaccess = dirname( $cached_font ) . '/.htaccess';
+            if ( ! file_exists( $htaccess ) ) { file_put_contents( $htaccess, "Deny from all\n" ); }
+        }
+
+        foreach ( array_filter( [ $cached_font, $plugin_font ], 'file_exists' ) as $path ) {
+            set_error_handler( static function() {} );
+            $ok = @imagettfbbox( 12, 0, $path, 'x' );
+            restore_error_handler();
+            if ( $ok !== false ) { return $cached = $path; }
+        }
+
+        return $cached = false;
     }
 
     /**

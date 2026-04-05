@@ -51,11 +51,12 @@ class WM_Admin {
         wp_enqueue_style(  'wm-admin', WM_URL . 'assets/css/admin.css', [],              WM_VERSION );
         wp_enqueue_script( 'wm-admin', WM_URL . 'assets/js/admin.js',   [ 'jquery', 'media-views' ], WM_VERSION, true );
 
+        $freetype_font = WM_Processor::test_freetype(); // false or working font path
         wp_localize_script( 'wm-admin', 'wmPro', [
             'ajaxUrl'     => admin_url( 'admin-ajax.php' ),
             'nonce'       => wp_create_nonce( 'wm_nonce' ),
             'hasImagick'  => extension_loaded( 'imagick' ) ? '1' : '0',
-            'hasFreetype' => function_exists( 'imagettftext' ) ? '1' : '0',
+            'hasFreetype' => $freetype_font ? '1' : '0',
             'fonts'       => WM_Processor::detect_available_fonts(),
             'i18n'        => [
                 'selectImages'    => __( 'Bilder auswählen',                    'watermark-pro' ),

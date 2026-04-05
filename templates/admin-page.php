@@ -140,8 +140,8 @@
                                     <input type="checkbox" id="wm-text-enabled">
                                     <?php esc_html_e( 'Text-Wasserzeichen', 'watermark-pro' ); ?>
                                 </label>
-                                <?php if ( ! function_exists( 'imagettftext' ) ) : ?>
-                                    <span class="wm-hint" style="color:#d63638;margin:0"><?php esc_html_e( 'FreeType nicht verfügbar.', 'watermark-pro' ); ?></span>
+                                <?php if ( ! WM_Processor::test_freetype() ) : ?>
+                                    <span class="wm-hint" style="color:#d63638;margin:0"><?php esc_html_e( 'FreeType nicht verfügbar – Text-Wasserzeichen deaktiviert.', 'watermark-pro' ); ?></span>
                                 <?php endif; ?>
                             </div>
                             <div id="wm-no-font-warning" class="notice notice-warning inline" style="display:none;margin:8px 0 0;padding:6px 12px;font-size:12px"></div>
