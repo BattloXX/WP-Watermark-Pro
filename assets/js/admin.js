@@ -646,6 +646,7 @@
             delete data.name;
 
             $.post(wmPro.ajaxUrl, data, function (res) {
+                if (res.success) { saveStateToStorage(); }
                 results.push(res.success
                     ? { ok: true,  title: img.title, data: res.data }
                     : { ok: false, title: img.title, message: (res.data && res.data.message) || wmPro.i18n.errorApply }
@@ -771,8 +772,113 @@
     }
 
     // =========================================================================
+    // No-font warning (Feature 2)
+    // =========================================================================
+    var _realFontKeys = Object.keys(wmPro.fonts).filter(function (k) {
+        return k !== 'auto' && k !== 'custom';
+    });
+    var _hasBundledFont = (_realFontKeys.length > 0);
+
+    $('#wm-text-enabled').on('change.fontwarn', function () {
+        if (this.checked && !_hasBundledFont) {
+            $('#wm-no-font-warning').text(wmPro.i18n.noFont).show();
+        } else {
+            $('#wm-no-font-warning').hide();
+        }
+    });
+
+    // =========================================================================
+    // localStorage – save & restore last state (Feature 3)
+    // =========================================================================
+    var LS_KEY = 'wmProLastState';
+
+    function saveStateToStorage() {
+        try {
+            var snapshot = $.extend({}, state);
+            delete snapshot.images;   // do not persist image selection
+            localStorage.setItem(LS_KEY, JSON.stringify(snapshot));
+        } catch (e) { /* storage not available */ }
+    }
+
+    function restoreStateFromStorage() {
+        try {
+            var raw = localStorage.getItem(LS_KEY);
+            if (!raw) { return; }
+            var saved = JSON.parse(raw);
+            if (typeof saved !== 'object' || saved === null) { return; }
+
+            // Merge saved values into state (images is not persisted)
+            $.extend(state, saved);
+
+            // Apply to DOM
+            $('#wm-image-wm-enabled').prop('checked', state.imageWmEnabled);
+            $('#wm-image-wm-settings, #wm-image-wm-controls').toggle(state.imageWmEnabled);
+
+            $('#wm-text-enabled').prop('checked', state.textEnabled);
+            $('#wm-text-settings').toggle(state.textEnabled);
+
+            $('#wm-position').val(state.position);
+            $('.wm-pos-btn').removeClass('active').attr('aria-pressed', 'false');
+            $('.wm-pos-btn[data-pos="' + state.position + '"]').addClass('active').attr('aria-pressed', 'true');
+
+            $('#wm-offset-x').val(state.offsetX);
+            $('#wm-offset-y').val(state.offsetY);
+            $('#wm-size').val(state.sizePct);         $('#wm-size-val').text(state.sizePct);
+            $('#wm-opacity').val(state.opacity);      $('#wm-opacity-val').text(state.opacity);
+            $('#wm-save-mode').val(state.saveMode);
+
+            $('#wm-text-content').val(state.textContent);
+            $('#wm-text-position').val(state.textPosition);
+            $('#wm-text-font-family').val(state.textFontFamily);
+            $('#wm-text-font-custom-wrap').toggle(state.textFontFamily === 'custom');
+            $('#wm-text-font-path').val(state.textFontPath);
+            $('#wm-text-size').val(state.textFontSize);    $('#wm-text-size-val').text(state.textFontSize);
+            $('#wm-text-color').val(state.textColor);
+            $('#wm-text-opacity').val(state.textOpacity);  $('#wm-text-opacity-val').text(state.textOpacity);
+            $('#wm-text-offset-x').val(state.textOffsetX);
+            $('#wm-text-offset-y').val(state.textOffsetY);
+            $('.wm-align-btn').removeClass('active');
+            $('.wm-align-btn[data-align="' + state.textAlign + '"]').addClass('active');
+
+            if (state.watermark) {
+                wmImg = null;
+                renderWatermarkThumb();
+            }
+        } catch (e) { /* ignore parse errors */ }
+    }
+
+    // =========================================================================
     // Init
     // =========================================================================
+
+    // Bug 2 fix: sync state from current DOM values
+    (function initStateFromDom() {
+        state.imageWmEnabled = $('#wm-image-wm-enabled').is(':checked');
+        state.textEnabled    = $('#wm-text-enabled').is(':checked');
+        state.textContent    = $('#wm-text-content').val();
+        state.textPosition   = $('#wm-text-position').val()      || state.textPosition;
+        state.textAlign      = $('.wm-align-btn.active').data('align') || state.textAlign;
+        state.textFontFamily = $('#wm-text-font-family').val()   || state.textFontFamily;
+        state.textFontPath   = $('#wm-text-font-path').val();
+        state.textFontSize   = +$('#wm-text-size').val()         || state.textFontSize;
+        state.textColor      = $('#wm-text-color').val()         || state.textColor;
+        state.textOpacity    = +$('#wm-text-opacity').val()      || state.textOpacity;
+        state.textOffsetX    = +$('#wm-text-offset-x').val();
+        state.textOffsetY    = +$('#wm-text-offset-y').val();
+        state.position       = $('#wm-position').val()           || state.position;
+        state.sizePct        = +$('#wm-size').val()              || state.sizePct;
+        state.opacity        = +$('#wm-opacity').val()           || state.opacity;
+        state.offsetX        = +$('#wm-offset-x').val();
+        state.offsetY        = +$('#wm-offset-y').val();
+        state.saveMode       = $('#wm-save-mode').val()          || state.saveMode;
+
+        $('#wm-image-wm-settings, #wm-image-wm-controls').toggle(state.imageWmEnabled);
+        $('#wm-text-settings').toggle(state.textEnabled);
+    }());
+
+    // Restore last-used settings from localStorage (overwrites DOM defaults)
+    restoreStateFromStorage();
+
     loadTemplates();
 
 }(jQuery));

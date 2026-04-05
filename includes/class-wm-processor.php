@@ -14,6 +14,7 @@ class WM_Processor {
     private const FONT_CANDIDATES = [
         'auto'       => [],   // resolved dynamically to first available family
         'dejavu'     => [
+            // plugin-bundled font is prepended at runtime in resolve_font() / detect_available_fonts()
             '/usr/share/fonts/truetype/dejavu/DejaVuSans.ttf',
             '/usr/share/fonts/dejavu/DejaVuSans.ttf',
             '/usr/share/fonts/truetype/ttf-dejavu/DejaVuSans.ttf',
@@ -142,6 +143,17 @@ class WM_Processor {
 
         // ---- Text watermark ----
         if ( $has_text_wm ) {
+            $font = $this->resolve_font(
+                $settings['text_font_family'] ?? 'auto',
+                $settings['text_font_path']   ?? ''
+            );
+            if ( ! $font || ! function_exists( 'imagettftext' ) ) {
+                imagedestroy( $base );
+                return new WP_Error(
+                    'no_font',
+                    __( 'Kein TTF-Font gefunden. Text-Wasserzeichen konnte nicht gerendert werden.', 'watermark-pro' )
+                );
+            }
             $this->apply_text_watermark( $base, $base_w, $base_h, $settings );
         }
 
@@ -174,7 +186,7 @@ class WM_Processor {
      */
     public static function detect_available_fonts(): array {
         $labels = [
-            'dejavu'           => 'DejaVu Sans (Sans-Serif)',
+            'dejavu'           => 'DejaVu Sans (empfohlen)',
             'liberation'       => 'Liberation Sans / Arial',
             'liberation-serif' => 'Liberation Serif / Times',
             'liberation-mono'  => 'Liberation Mono / Courier',
@@ -183,7 +195,14 @@ class WM_Processor {
 
         $available = [ 'auto' => 'Auto (beste verfügbare)' ];
 
+        // Plugin-bundled DejaVu Sans is always available when the file exists
+        $plugin_font = defined( 'WM_DIR' ) ? WM_DIR . 'fonts/DejaVuSans.ttf' : '';
+        if ( $plugin_font && file_exists( $plugin_font ) ) {
+            $available['dejavu'] = 'DejaVu Sans (empfohlen)';
+        }
+
         foreach ( $labels as $slug => $label ) {
+            if ( isset( $available[ $slug ] ) ) { continue; } // already found via plugin font
             foreach ( self::FONT_CANDIDATES[ $slug ] as $path ) {
                 if ( file_exists( $path ) ) {
                     $available[ $slug ] = $label;
@@ -331,7 +350,20 @@ class WM_Processor {
             return $custom_path;
         }
 
+        // Plugin-bundled DejaVu Sans: try first for 'auto' or 'dejavu'
+        $plugin_font = defined( 'WM_DIR' ) ? WM_DIR . 'fonts/DejaVuSans.ttf' : '';
+        if ( $plugin_font && file_exists( $plugin_font ) ) {
+            if ( $family === 'auto' || $family === 'dejavu' ) {
+                return $plugin_font;
+            }
+        }
+
         $candidates = self::FONT_CANDIDATES;
+
+        // Prepend plugin font to dejavu candidate list (covers named 'dejavu' lookup below)
+        if ( $plugin_font ) {
+            array_unshift( $candidates['dejavu'], $plugin_font );
+        }
 
         // 'auto' → try all families, return first hit
         if ( $family === 'auto' || ! isset( $candidates[ $family ] ) ) {

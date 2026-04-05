@@ -2,7 +2,7 @@
 /**
  * Plugin Name: Watermark Pro
  * Description: PNG/EPS-Wasserzeichen und Text-Wasserzeichen auf Bilder anwenden – mit Positionierung, Größe, Vorlagen.
- * Version:     1.1.0
+ * Version:     1.2.0
  * Requires at least: 6.0
  * Requires PHP: 8.0
  * Author:      Johannes Battlogg
@@ -11,7 +11,7 @@
 
 defined( 'ABSPATH' ) || exit;
 
-define( 'WM_VERSION', '1.1.0' );
+define( 'WM_VERSION', '1.2.0' );
 define( 'WM_DIR',     plugin_dir_path( __FILE__ ) );
 define( 'WM_URL',     plugin_dir_url( __FILE__ ) );
 

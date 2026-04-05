@@ -144,6 +144,7 @@
                             <?php if ( ! function_exists( 'imagettftext' ) ) : ?>
                                 <p class="wm-hint" style="color:#d63638"><?php esc_html_e( 'FreeType (imagettftext) nicht verfügbar – Text-Wasserzeichen deaktiviert.', 'watermark-pro' ); ?></p>
                             <?php endif; ?>
+                            <div id="wm-no-font-warning" class="notice notice-warning inline" style="display:none;margin:6px 0 0;padding:6px 12px"></div>
                         </div>
 
                         <div id="wm-text-settings" style="display:none">
