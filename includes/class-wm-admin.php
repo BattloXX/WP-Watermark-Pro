@@ -241,6 +241,23 @@ class WM_Admin {
             return $r; // false = GD could not read font
         };
 
+        // Imagick text test
+        $imagick_text_ok = false;
+        $imagick_error   = null;
+        if ( extension_loaded( 'imagick' ) ) {
+            try {
+                $t_im = new \Imagick();
+                $t_im->newImage( 100, 30, new \ImagickPixel( 'white' ) );
+                $t_draw = new \ImagickDraw();
+                $t_draw->setFontSize( 12 );
+                $t_im->annotateImage( $t_draw, 5, 20, 0, 'Test' );
+                $t_im->destroy();
+                $imagick_text_ok = true;
+            } catch ( \Exception $e ) {
+                $imagick_error = $e->getMessage();
+            }
+        }
+
         wp_send_json_success( [
             'open_basedir'        => ini_get( 'open_basedir' ) ?: '(not set)',
             'wm_dir'              => WM_DIR,
@@ -252,6 +269,10 @@ class WM_Admin {
             'cached_font_bbox'    => $test_bbox( $cached_font ),
             'imagettftext_exists' => function_exists( 'imagettftext' ),
             'gd_freetype'         => ( gd_info()['FreeType Support'] ?? false ),
+            'imagick_loaded'      => extension_loaded( 'imagick' ),
+            'imagick_text_ok'     => $imagick_text_ok,
+            'imagick_error'       => $imagick_error,
+            'test_freetype_result'=> WM_Processor::test_freetype(),
             'available_fonts'     => WM_Processor::detect_available_fonts(),
         ] );
     }

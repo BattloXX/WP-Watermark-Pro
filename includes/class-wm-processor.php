@@ -146,23 +146,30 @@ class WM_Processor {
 
         // ---- Text watermark ----
         if ( $has_text_wm ) {
+            // Try GD/FreeType first; fall back to Imagick if unavailable or broken
+            // (FreeBSD + PHP-FPM symlink path issue can cause GD/FreeType to fail
+            //  even when the function and font file both exist).
+            $text_ok = false;
+
             $font = $this->resolve_font(
                 $settings['text_font_family'] ?? 'auto',
                 $settings['text_font_path']   ?? ''
             );
-            if ( ! $font || ! function_exists( 'imagettftext' ) ) {
-                imagedestroy( $base );
-                return new WP_Error(
-                    'no_font',
-                    __( 'Kein TTF-Font gefunden. Text-Wasserzeichen konnte nicht gerendert werden.', 'watermark-pro' )
-                );
+
+            if ( $font && function_exists( 'imagettftext' ) ) {
+                $text_ok = $this->apply_text_watermark( $base, $base_w, $base_h, $settings );
             }
-            $text_ok = $this->apply_text_watermark( $base, $base_w, $base_h, $settings );
+
+            if ( ! $text_ok ) {
+                // GD failed (or wasn't available) — try Imagick text renderer
+                $text_ok = $this->apply_text_watermark_imagick( $base, $base_w, $base_h, $settings );
+            }
+
             if ( ! $text_ok ) {
                 imagedestroy( $base );
                 return new WP_Error(
-                    'ttf_failed',
-                    __( 'GD konnte die Font-Datei nicht lesen (imagettfbbox/imagettftext fehlgeschlagen). Pfad:', 'watermark-pro' ) . ' ' . $font
+                    'text_wm_failed',
+                    __( 'Text-Wasserzeichen konnte nicht gerendert werden. Weder GD/FreeType noch Imagick stehen zur Verfügung.', 'watermark-pro' )
                 );
             }
         }
@@ -218,6 +225,11 @@ class WM_Processor {
             $ok = @imagettfbbox( 12, 0, $path, 'x' );
             restore_error_handler();
             if ( $ok !== false ) { return $cached = $path; }
+        }
+
+        // GD/FreeType unavailable – Imagick can render text as fallback
+        if ( extension_loaded( 'imagick' ) ) {
+            return $cached = 'imagick';
         }
 
         return $cached = false;
@@ -400,6 +412,184 @@ class WM_Processor {
         }
 
         return true;
+    }
+
+    // =========================================================================
+    // Text watermark – Imagick fallback
+    // (Used when GD/FreeType fails, e.g. FreeBSD symlink path issues)
+    // =========================================================================
+
+    private function apply_text_watermark_imagick( $base_gd, int $bw, int $bh, array $s ): bool {
+        if ( ! extension_loaded( 'imagick' ) ) { return false; }
+
+        try {
+            // Transparent overlay canvas – same size as base image
+            $overlay = new \Imagick();
+            $overlay->newImage( $bw, $bh, new \ImagickPixel( 'none' ) );
+            $overlay->setImageFormat( 'png32' );
+
+            $draw = new \ImagickDraw();
+
+            // ---- Font ----
+            $font_path = $this->resolve_font_for_imagick(
+                $s['text_font_family'] ?? 'auto',
+                $s['text_font_path']   ?? ''
+            );
+            if ( $font_path ) {
+                try { $draw->setFont( $font_path ); } catch ( \Exception $e ) {}
+            }
+
+            $size = max( 8, (int) ( $s['text_font_size'] ?? 36 ) );
+            $draw->setFontSize( $size );
+            $draw->setStrokeWidth( 0 );
+
+            // ---- Color + opacity ----
+            $hex     = ltrim( $s['text_color'] ?? '#ffffff', '#' );
+            $r       = hexdec( substr( $hex, 0, 2 ) );
+            $g       = hexdec( substr( $hex, 2, 2 ) );
+            $b       = hexdec( substr( $hex, 4, 2 ) );
+            $opacity = max( 0, min( 100, (int) ( $s['text_opacity'] ?? 80 ) ) );
+            $draw->setFillColor( new \ImagickPixel( "rgba($r,$g,$b," . round( $opacity / 100, 4 ) . ')' ) );
+            $draw->setFillOpacity( $opacity / 100 );
+
+            $text  = $s['text_content'];
+            $pos   = $s['text_position']  ?? 'bottom-right';
+            $align = $s['text_align']     ?? 'center';
+            $ox    = max( 0, (int) ( $s['text_offset_x'] ?? 10 ) );
+            $oy    = max( 0, (int) ( $s['text_offset_y'] ?? 10 ) );
+
+            // ---- Measure text ----
+            $metrics = $overlay->queryFontMetrics( $draw, $text );
+            $text_w  = (float) ( $metrics['textWidth']  ?? $size * mb_strlen( $text ) * 0.6 );
+            $text_h  = (float) ( $metrics['textHeight'] ?? $size * 1.2 );
+            $asc     = (float) ( $metrics['ascender']   ?? $size * 0.8 );
+
+            $is_edge_left  = ( $pos === 'edge-left'  );
+            $is_edge_right = ( $pos === 'edge-right' );
+
+            // ---- Position calculation ----
+            // Imagick annotateImage() uses BASELINE (x, y); angle is clockwise degrees.
+            $angle  = 0;
+            $draw_x = 0.0;
+            $draw_y = 0.0;
+
+            if ( $is_edge_left ) {
+                $angle  = -90.0;   // CCW in Imagick
+                $draw_x = (float) ( $ox + $asc );
+                $draw_y = (float) match ( $align ) {
+                    'right'  => $oy + $text_w,
+                    'center' => ( $bh + $text_w ) / 2,
+                    default  => $bh - $oy,
+                };
+                $draw->setTextAlignment( \Imagick::ALIGN_LEFT );
+
+            } elseif ( $is_edge_right ) {
+                $angle  = 90.0;    // CW
+                $draw_x = (float) ( $bw - $ox - $asc + $text_h );
+                $draw_y = (float) match ( $align ) {
+                    'right'  => $bh - $oy - $text_w,
+                    'center' => ( $bh - $text_w ) / 2,
+                    default  => $oy,
+                };
+                $draw->setTextAlignment( \Imagick::ALIGN_LEFT );
+
+            } else {
+                // Horizontal positions (grid + edge-top / edge-bottom)
+                $is_edge_h = ( $pos === 'edge-top' || $pos === 'edge-bottom' );
+                $eff_align = $is_edge_h ? $align
+                           : ( str_contains( $pos, 'right' ) ? 'right'
+                             : ( str_contains( $pos, 'left' ) ? 'left' : 'center' ) );
+
+                switch ( $eff_align ) {
+                    case 'right':
+                        $draw->setTextAlignment( \Imagick::ALIGN_RIGHT );
+                        $draw_x = (float) ( $bw - $ox );
+                        break;
+                    case 'left':
+                        $draw->setTextAlignment( \Imagick::ALIGN_LEFT );
+                        $draw_x = (float) $ox;
+                        break;
+                    default:
+                        $draw->setTextAlignment( \Imagick::ALIGN_CENTER );
+                        $draw_x = (float) ( $bw / 2 );
+                }
+
+                // Baseline y
+                if ( str_contains( $pos, 'top' ) || $pos === 'edge-top' ) {
+                    $draw_y = (float) ( $oy + $asc );
+                } elseif ( str_contains( $pos, 'bottom' ) || $pos === 'edge-bottom' ) {
+                    $draw_y = (float) ( $bh - $oy );
+                } else {
+                    $draw_y = (float) round( ( $bh + $asc ) / 2 );
+                }
+            }
+
+            $overlay->annotateImage( $draw, $draw_x, $draw_y, $angle, $text );
+
+            // ---- Composite overlay onto GD base ----
+            $overlay->setImageFormat( 'png32' );
+            $blob = $overlay->getImageBlob();
+            $overlay->destroy();
+
+            $gd_overlay = @imagecreatefromstring( $blob );
+            if ( ! $gd_overlay ) { return false; }
+
+            imagealphablending( $base_gd, true );
+            imagecopy( $base_gd, $gd_overlay, 0, 0, 0, 0, $bw, $bh );
+            imagedestroy( $gd_overlay );
+
+            return true;
+
+        } catch ( \Exception $e ) {
+            error_log( 'WM_Processor: Imagick text rendering failed: ' . $e->getMessage() );
+            return false;
+        }
+    }
+
+    /**
+     * Find a font file readable by Imagick/ImageMagick.
+     * Adds FreeBSD-specific paths that GD/FreeType may not access.
+     */
+    private function resolve_font_for_imagick( string $family, string $custom_path ): string|false {
+        if ( $custom_path && file_exists( $custom_path ) ) { return $custom_path; }
+
+        // Combine plugin/uploads paths from resolve_font() with BSD system paths
+        $candidates = [];
+
+        // Plugin-bundled font (uploads copy first to avoid symlink issues)
+        $plugin_font = defined( 'WM_DIR' ) ? WM_DIR . 'fonts/DejaVuSans.ttf' : '';
+        $upload_dir  = wp_upload_dir();
+        $cached_font = $upload_dir['basedir'] . '/wm-fonts/DejaVuSans.ttf';
+
+        foreach ( [ $cached_font, $plugin_font ] as $p ) {
+            if ( $p && file_exists( $p ) ) { $candidates[] = $p; }
+        }
+
+        // FreeBSD system font paths (not checked by GD's symlink-resolved paths)
+        $bsd_fonts = [
+            '/usr/local/share/fonts/dejavu/DejaVuSans.ttf',
+            '/usr/local/share/fonts/TTF/DejaVuSans.ttf',
+            '/usr/local/share/fonts/truetype/DejaVuSans.ttf',
+            '/usr/local/lib/X11/fonts/dejavu/DejaVuSans.ttf',
+        ];
+        foreach ( $bsd_fonts as $p ) {
+            if ( file_exists( $p ) ) { $candidates[] = $p; }
+        }
+
+        foreach ( $candidates as $path ) {
+            // Quick Imagick font validity test
+            try {
+                $t = new \ImagickDraw();
+                $t->setFont( $path );
+                // If setFont() doesn't throw, the path is accepted by Imagick
+                return $path;
+            } catch ( \Exception $e ) {
+                // try next
+            }
+        }
+
+        // No file found – return false and let Imagick use its default font
+        return false;
     }
 
     // =========================================================================
