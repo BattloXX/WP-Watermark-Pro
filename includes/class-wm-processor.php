@@ -15,30 +15,46 @@ class WM_Processor {
         'auto'       => [],   // resolved dynamically to first available family
         'dejavu'     => [
             // plugin-bundled font is prepended at runtime in resolve_font() / detect_available_fonts()
+            // FreeBSD (ports)
+            '/usr/local/share/fonts/dejavu/DejaVuSans.ttf',
+            '/usr/local/share/fonts/TTF/DejaVuSans.ttf',
+            '/usr/local/share/fonts/truetype/DejaVuSans.ttf',
+            '/usr/local/lib/X11/fonts/dejavu/DejaVuSans.ttf',
+            // Linux (Debian/Ubuntu/RHEL)
             '/usr/share/fonts/truetype/dejavu/DejaVuSans.ttf',
             '/usr/share/fonts/dejavu/DejaVuSans.ttf',
             '/usr/share/fonts/truetype/ttf-dejavu/DejaVuSans.ttf',
+            // Windows
             'C:/Windows/Fonts/DejaVuSans.ttf',
         ],
         'liberation' => [
+            // FreeBSD
+            '/usr/local/share/fonts/liberation/LiberationSans-Regular.ttf',
+            '/usr/local/share/fonts/TTF/LiberationSans-Regular.ttf',
+            // Linux
             '/usr/share/fonts/truetype/liberation/LiberationSans-Regular.ttf',
             '/usr/share/fonts/liberation/LiberationSans-Regular.ttf',
             '/usr/share/fonts/truetype/liberation2/LiberationSans-Regular.ttf',
+            // Windows fallback
             'C:/Windows/Fonts/arial.ttf',
         ],
         'liberation-serif' => [
+            '/usr/local/share/fonts/liberation/LiberationSerif-Regular.ttf',
             '/usr/share/fonts/truetype/liberation/LiberationSerif-Regular.ttf',
             '/usr/share/fonts/liberation/LiberationSerif-Regular.ttf',
             'C:/Windows/Fonts/times.ttf',
             'C:/Windows/Fonts/georgia.ttf',
         ],
         'liberation-mono' => [
+            '/usr/local/share/fonts/liberation/LiberationMono-Regular.ttf',
             '/usr/share/fonts/truetype/liberation/LiberationMono-Regular.ttf',
             '/usr/share/fonts/liberation/LiberationMono-Regular.ttf',
             'C:/Windows/Fonts/cour.ttf',
             'C:/Windows/Fonts/consola.ttf',
         ],
         'freefont' => [
+            '/usr/local/share/fonts/freefont/FreeSans.ttf',
+            '/usr/local/share/fonts/TTF/FreeSans.ttf',
             '/usr/share/fonts/truetype/freefont/FreeSans.ttf',
             '/usr/share/fonts/freefont/FreeSans.ttf',
         ],
@@ -541,7 +557,14 @@ class WM_Processor {
             return true;
 
         } catch ( \Exception $e ) {
-            error_log( 'WM_Processor: Imagick text rendering failed: ' . $e->getMessage() );
+            $version = extension_loaded( 'imagick' )
+                ? ( \Imagick::getVersion()['versionString'] ?? 'unknown' )
+                : 'not loaded';
+            error_log(
+                'WM_Processor: Imagick text rendering failed: ' . $e->getMessage()
+                . ' | font_path=' . ( $font_path ?: 'none (default)' )
+                . ' | imagick=' . $version
+            );
             return false;
         }
     }
@@ -551,44 +574,57 @@ class WM_Processor {
      * Adds FreeBSD-specific paths that GD/FreeType may not access.
      */
     private function resolve_font_for_imagick( string $family, string $custom_path ): string|false {
-        if ( $custom_path && file_exists( $custom_path ) ) { return $custom_path; }
+        if ( $custom_path && file_exists( $custom_path ) ) {
+            return realpath( $custom_path ) ?: $custom_path;
+        }
 
-        // Combine plugin/uploads paths from resolve_font() with BSD system paths
         $candidates = [];
 
-        // Plugin-bundled font (uploads copy first to avoid symlink issues)
-        $plugin_font = defined( 'WM_DIR' ) ? WM_DIR . 'fonts/DejaVuSans.ttf' : '';
+        // 1. Uploads-dir copy (guaranteed no symlink, no open_basedir issues)
         $upload_dir  = wp_upload_dir();
         $cached_font = $upload_dir['basedir'] . '/wm-fonts/DejaVuSans.ttf';
 
-        foreach ( [ $cached_font, $plugin_font ] as $p ) {
-            if ( $p && file_exists( $p ) ) { $candidates[] = $p; }
+        // Ensure the copy exists before trying it
+        $plugin_font = defined( 'WM_DIR' ) ? WM_DIR . 'fonts/DejaVuSans.ttf' : '';
+        if ( $plugin_font && file_exists( $plugin_font ) && ! file_exists( $cached_font ) ) {
+            $real_src = realpath( $plugin_font ) ?: $plugin_font;
+            wp_mkdir_p( dirname( $cached_font ) );
+            @copy( $real_src, $cached_font );
+            @chmod( $cached_font, 0644 );
+            $ht = dirname( $cached_font ) . '/.htaccess';
+            if ( ! file_exists( $ht ) ) { file_put_contents( $ht, "Deny from all\n" ); }
         }
 
-        // FreeBSD system font paths (not checked by GD's symlink-resolved paths)
-        $bsd_fonts = [
+        if ( file_exists( $cached_font ) ) { $candidates[] = $cached_font; }
+
+        // 2. Plugin font with realpath() applied
+        if ( $plugin_font ) {
+            $real = realpath( $plugin_font );
+            $p    = ( $real && file_exists( $real ) ) ? $real : ( file_exists( $plugin_font ) ? $plugin_font : '' );
+            if ( $p ) { $candidates[] = $p; }
+        }
+
+        // 3. FreeBSD system font paths
+        foreach ( [
             '/usr/local/share/fonts/dejavu/DejaVuSans.ttf',
             '/usr/local/share/fonts/TTF/DejaVuSans.ttf',
             '/usr/local/share/fonts/truetype/DejaVuSans.ttf',
             '/usr/local/lib/X11/fonts/dejavu/DejaVuSans.ttf',
-        ];
-        foreach ( $bsd_fonts as $p ) {
+        ] as $p ) {
             if ( file_exists( $p ) ) { $candidates[] = $p; }
         }
 
         foreach ( $candidates as $path ) {
-            // Quick Imagick font validity test
             try {
                 $t = new \ImagickDraw();
                 $t->setFont( $path );
-                // If setFont() doesn't throw, the path is accepted by Imagick
-                return $path;
+                return $path; // accepted by Imagick
             } catch ( \Exception $e ) {
-                // try next
+                // try next candidate
             }
         }
 
-        // No file found – return false and let Imagick use its default font
+        // No working path found – Imagick will use its default/built-in font
         return false;
     }
 
@@ -599,16 +635,21 @@ class WM_Processor {
     private function resolve_font( string $family, string $custom_path ): string|false {
         // Custom absolute path wins
         if ( $custom_path && file_exists( $custom_path ) ) {
-            return $custom_path;
+            return realpath( $custom_path ) ?: $custom_path;
         }
 
         // Plugin-bundled DejaVu Sans: try first for 'auto' or 'dejavu'
         $plugin_font = defined( 'WM_DIR' ) ? WM_DIR . 'fonts/DejaVuSans.ttf' : '';
+        // Resolve symlinks (critical on FreeBSD where /home → /usr/home;
+        // PHP's __FILE__ returns the realpath, but GD/FreeType may only accept the
+        // symlink-free path or the uploads-dir copy).
+        if ( $plugin_font ) {
+            $real = realpath( $plugin_font );
+            if ( $real ) { $plugin_font = $real; }
+        }
+
         if ( $plugin_font && file_exists( $plugin_font ) ) {
             if ( $family === 'auto' || $family === 'dejavu' ) {
-                // open_basedir workaround: imagettftext() may be blocked from reading
-                // files in the plugin directory even though file_exists() returns true.
-                // Copying the font to the uploads dir (which is always allowed) fixes this.
                 $resolved = $this->ensure_font_in_uploads( $plugin_font, 'DejaVuSans.ttf' );
                 return $resolved ?: $plugin_font;
             }
@@ -645,6 +686,14 @@ class WM_Processor {
      * Returns the uploads-dir path on success, or false if the copy failed.
      */
     private function ensure_font_in_uploads( string $src_path, string $filename ): string|false {
+        // Resolve symlinks on the SOURCE to get the true filesystem path.
+        // On FreeBSD /home is a symlink to /usr/home; copy() from the
+        // symlinked path may silently fail in some FPM configurations.
+        $real_src = realpath( $src_path );
+        if ( $real_src && file_exists( $real_src ) ) {
+            $src_path = $real_src;
+        }
+
         $upload_dir  = wp_upload_dir();
         $font_dir    = $upload_dir['basedir'] . '/wm-fonts';
         $cached_path = $font_dir . '/' . $filename;
@@ -664,7 +713,7 @@ class WM_Processor {
             }
 
             if ( ! @copy( $src_path, $cached_path ) || filesize( $cached_path ) < 1024 ) {
-                error_log( 'WM_Processor: failed to copy font to uploads: ' . $cached_path );
+                error_log( 'WM_Processor: failed to copy font to uploads: ' . $cached_path . ' (src: ' . $src_path . ')' );
                 return false;
             }
 
