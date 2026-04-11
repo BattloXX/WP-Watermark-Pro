@@ -438,135 +438,149 @@ class WM_Processor {
     private function apply_text_watermark_imagick( $base_gd, int $bw, int $bh, array $s ): bool {
         if ( ! extension_loaded( 'imagick' ) ) { return false; }
 
-        try {
-            // Transparent overlay canvas – same size as base image
-            $overlay = new \Imagick();
-            $overlay->newImage( $bw, $bh, new \ImagickPixel( 'none' ) );
-            $overlay->setImageFormat( 'png32' );
+        // Resolve font once; we'll try with it first, then without (Imagick default)
+        $resolved_font = $this->resolve_font_for_imagick(
+            $s['text_font_family'] ?? 'auto',
+            $s['text_font_path']   ?? ''
+        );
+        $font_attempts = $resolved_font ? [ $resolved_font, null ] : [ null ];
 
-            $draw = new \ImagickDraw();
+        foreach ( $font_attempts as $font_path ) {
+            try {
+                // Transparent overlay canvas – same size as base image
+                $overlay = new \Imagick();
+                $overlay->newImage( $bw, $bh, new \ImagickPixel( 'none' ) );
+                $overlay->setImageFormat( 'png32' );
 
-            // ---- Font ----
-            $font_path = $this->resolve_font_for_imagick(
-                $s['text_font_family'] ?? 'auto',
-                $s['text_font_path']   ?? ''
-            );
-            if ( $font_path ) {
-                try { $draw->setFont( $font_path ); } catch ( \Exception $e ) {}
-            }
+                $draw = new \ImagickDraw();
 
-            $size = max( 8, (int) ( $s['text_font_size'] ?? 36 ) );
-            $draw->setFontSize( $size );
-            $draw->setStrokeWidth( 0 );
-
-            // ---- Color + opacity ----
-            $hex     = ltrim( $s['text_color'] ?? '#ffffff', '#' );
-            $r       = hexdec( substr( $hex, 0, 2 ) );
-            $g       = hexdec( substr( $hex, 2, 2 ) );
-            $b       = hexdec( substr( $hex, 4, 2 ) );
-            $opacity = max( 0, min( 100, (int) ( $s['text_opacity'] ?? 80 ) ) );
-            $draw->setFillColor( new \ImagickPixel( "rgba($r,$g,$b," . round( $opacity / 100, 4 ) . ')' ) );
-            $draw->setFillOpacity( $opacity / 100 );
-
-            $text  = $s['text_content'];
-            $pos   = $s['text_position']  ?? 'bottom-right';
-            $align = $s['text_align']     ?? 'center';
-            $ox    = max( 0, (int) ( $s['text_offset_x'] ?? 10 ) );
-            $oy    = max( 0, (int) ( $s['text_offset_y'] ?? 10 ) );
-
-            // ---- Measure text ----
-            $metrics = $overlay->queryFontMetrics( $draw, $text );
-            $text_w  = (float) ( $metrics['textWidth']  ?? $size * mb_strlen( $text ) * 0.6 );
-            $text_h  = (float) ( $metrics['textHeight'] ?? $size * 1.2 );
-            $asc     = (float) ( $metrics['ascender']   ?? $size * 0.8 );
-
-            $is_edge_left  = ( $pos === 'edge-left'  );
-            $is_edge_right = ( $pos === 'edge-right' );
-
-            // ---- Position calculation ----
-            // Imagick annotateImage() uses BASELINE (x, y); angle is clockwise degrees.
-            $angle  = 0;
-            $draw_x = 0.0;
-            $draw_y = 0.0;
-
-            if ( $is_edge_left ) {
-                $angle  = -90.0;   // CCW in Imagick
-                $draw_x = (float) ( $ox + $asc );
-                $draw_y = (float) match ( $align ) {
-                    'right'  => $oy + $text_w,
-                    'center' => ( $bh + $text_w ) / 2,
-                    default  => $bh - $oy,
-                };
-                $draw->setTextAlignment( \Imagick::ALIGN_LEFT );
-
-            } elseif ( $is_edge_right ) {
-                $angle  = 90.0;    // CW
-                $draw_x = (float) ( $bw - $ox - $asc + $text_h );
-                $draw_y = (float) match ( $align ) {
-                    'right'  => $bh - $oy - $text_w,
-                    'center' => ( $bh - $text_w ) / 2,
-                    default  => $oy,
-                };
-                $draw->setTextAlignment( \Imagick::ALIGN_LEFT );
-
-            } else {
-                // Horizontal positions (grid + edge-top / edge-bottom)
-                $is_edge_h = ( $pos === 'edge-top' || $pos === 'edge-bottom' );
-                $eff_align = $is_edge_h ? $align
-                           : ( str_contains( $pos, 'right' ) ? 'right'
-                             : ( str_contains( $pos, 'left' ) ? 'left' : 'center' ) );
-
-                switch ( $eff_align ) {
-                    case 'right':
-                        $draw->setTextAlignment( \Imagick::ALIGN_RIGHT );
-                        $draw_x = (float) ( $bw - $ox );
-                        break;
-                    case 'left':
-                        $draw->setTextAlignment( \Imagick::ALIGN_LEFT );
-                        $draw_x = (float) $ox;
-                        break;
-                    default:
-                        $draw->setTextAlignment( \Imagick::ALIGN_CENTER );
-                        $draw_x = (float) ( $bw / 2 );
+                // ---- Font ----
+                if ( $font_path ) {
+                    $draw->setFont( $font_path );
                 }
 
-                // Baseline y
-                if ( str_contains( $pos, 'top' ) || $pos === 'edge-top' ) {
-                    $draw_y = (float) ( $oy + $asc );
-                } elseif ( str_contains( $pos, 'bottom' ) || $pos === 'edge-bottom' ) {
-                    $draw_y = (float) ( $bh - $oy );
+                $size = max( 8, (int) ( $s['text_font_size'] ?? 36 ) );
+                $draw->setFontSize( $size );
+                $draw->setStrokeWidth( 0 );
+
+                // ---- Color + opacity ----
+                $hex     = ltrim( $s['text_color'] ?? '#ffffff', '#' );
+                $r       = hexdec( substr( $hex, 0, 2 ) );
+                $g       = hexdec( substr( $hex, 2, 2 ) );
+                $b       = hexdec( substr( $hex, 4, 2 ) );
+                $opacity = max( 0, min( 100, (int) ( $s['text_opacity'] ?? 80 ) ) );
+                $draw->setFillColor( new \ImagickPixel( "rgba($r,$g,$b," . round( $opacity / 100, 4 ) . ')' ) );
+                $draw->setFillOpacity( $opacity / 100 );
+
+                $text  = $s['text_content'];
+                $pos   = $s['text_position']  ?? 'bottom-right';
+                $align = $s['text_align']     ?? 'center';
+                $ox    = max( 0, (int) ( $s['text_offset_x'] ?? 10 ) );
+                $oy    = max( 0, (int) ( $s['text_offset_y'] ?? 10 ) );
+
+                // ---- Measure text ----
+                $metrics = $overlay->queryFontMetrics( $draw, $text );
+                $text_w  = (float) ( $metrics['textWidth']  ?? $size * mb_strlen( $text ) * 0.6 );
+                $text_h  = (float) ( $metrics['textHeight'] ?? $size * 1.2 );
+                $asc     = (float) ( $metrics['ascender']   ?? $size * 0.8 );
+
+                $is_edge_left  = ( $pos === 'edge-left'  );
+                $is_edge_right = ( $pos === 'edge-right' );
+
+                // ---- Position calculation ----
+                // Imagick annotateImage() uses BASELINE (x, y); angle is clockwise degrees.
+                $angle  = 0;
+                $draw_x = 0.0;
+                $draw_y = 0.0;
+
+                if ( $is_edge_left ) {
+                    $angle  = -90.0;   // CCW in Imagick
+                    $draw_x = (float) ( $ox + $asc );
+                    $draw_y = (float) match ( $align ) {
+                        'right'  => $oy + $text_w,
+                        'center' => ( $bh + $text_w ) / 2,
+                        default  => $bh - $oy,
+                    };
+                    $draw->setTextAlignment( \Imagick::ALIGN_LEFT );
+
+                } elseif ( $is_edge_right ) {
+                    $angle  = 90.0;    // CW
+                    $draw_x = (float) ( $bw - $ox - $asc + $text_h );
+                    $draw_y = (float) match ( $align ) {
+                        'right'  => $bh - $oy - $text_w,
+                        'center' => ( $bh - $text_w ) / 2,
+                        default  => $oy,
+                    };
+                    $draw->setTextAlignment( \Imagick::ALIGN_LEFT );
+
                 } else {
-                    $draw_y = (float) round( ( $bh + $asc ) / 2 );
+                    // Horizontal positions (grid + edge-top / edge-bottom)
+                    $is_edge_h = ( $pos === 'edge-top' || $pos === 'edge-bottom' );
+                    $eff_align = $is_edge_h ? $align
+                               : ( str_contains( $pos, 'right' ) ? 'right'
+                                 : ( str_contains( $pos, 'left' ) ? 'left' : 'center' ) );
+
+                    switch ( $eff_align ) {
+                        case 'right':
+                            $draw->setTextAlignment( \Imagick::ALIGN_RIGHT );
+                            $draw_x = (float) ( $bw - $ox );
+                            break;
+                        case 'left':
+                            $draw->setTextAlignment( \Imagick::ALIGN_LEFT );
+                            $draw_x = (float) $ox;
+                            break;
+                        default:
+                            $draw->setTextAlignment( \Imagick::ALIGN_CENTER );
+                            $draw_x = (float) ( $bw / 2 );
+                    }
+
+                    // Baseline y
+                    if ( str_contains( $pos, 'top' ) || $pos === 'edge-top' ) {
+                        $draw_y = (float) ( $oy + $asc );
+                    } elseif ( str_contains( $pos, 'bottom' ) || $pos === 'edge-bottom' ) {
+                        $draw_y = (float) ( $bh - $oy );
+                    } else {
+                        $draw_y = (float) round( ( $bh + $asc ) / 2 );
+                    }
                 }
+
+                $overlay->annotateImage( $draw, $draw_x, $draw_y, $angle, $text );
+
+                // ---- Composite overlay onto GD base ----
+                $overlay->setImageFormat( 'png32' );
+                $blob = $overlay->getImageBlob();
+                $overlay->destroy();
+
+                $gd_overlay = @imagecreatefromstring( $blob );
+                if ( ! $gd_overlay ) { return false; }
+
+                imagealphablending( $base_gd, true );
+                imagecopy( $base_gd, $gd_overlay, 0, 0, 0, 0, $bw, $bh );
+                imagedestroy( $gd_overlay );
+
+                return true;
+
+            } catch ( \Exception $e ) {
+                if ( $font_path !== null ) {
+                    // Font caused the failure – retry without font (Imagick default)
+                    error_log(
+                        'WM_Processor: Imagick failed with font ' . $font_path . ': ' . $e->getMessage()
+                        . ' — retrying without font'
+                    );
+                    continue;
+                }
+                $version = extension_loaded( 'imagick' )
+                    ? ( \Imagick::getVersion()['versionString'] ?? 'unknown' )
+                    : 'not loaded';
+                error_log(
+                    'WM_Processor: Imagick text rendering failed: ' . $e->getMessage()
+                    . ' | font_path=none (default)'
+                    . ' | imagick=' . $version
+                );
+                return false;
             }
-
-            $overlay->annotateImage( $draw, $draw_x, $draw_y, $angle, $text );
-
-            // ---- Composite overlay onto GD base ----
-            $overlay->setImageFormat( 'png32' );
-            $blob = $overlay->getImageBlob();
-            $overlay->destroy();
-
-            $gd_overlay = @imagecreatefromstring( $blob );
-            if ( ! $gd_overlay ) { return false; }
-
-            imagealphablending( $base_gd, true );
-            imagecopy( $base_gd, $gd_overlay, 0, 0, 0, 0, $bw, $bh );
-            imagedestroy( $gd_overlay );
-
-            return true;
-
-        } catch ( \Exception $e ) {
-            $version = extension_loaded( 'imagick' )
-                ? ( \Imagick::getVersion()['versionString'] ?? 'unknown' )
-                : 'not loaded';
-            error_log(
-                'WM_Processor: Imagick text rendering failed: ' . $e->getMessage()
-                . ' | font_path=' . ( $font_path ?: 'none (default)' )
-                . ' | imagick=' . $version
-            );
-            return false;
         }
+        return false;
     }
 
     /**
@@ -616,11 +630,16 @@ class WM_Processor {
 
         foreach ( $candidates as $path ) {
             try {
-                $t = new \ImagickDraw();
-                $t->setFont( $path );
-                return $path; // accepted by Imagick
+                $t_draw = new \ImagickDraw();
+                $t_draw->setFont( $path );
+                $t_draw->setFontSize( 12 );
+                $t_im = new \Imagick();
+                $t_im->newImage( 10, 10, new \ImagickPixel( 'white' ) );
+                $t_im->queryFontMetrics( $t_draw, 'x' );
+                $t_im->destroy();
+                return $path; // font actually works with Imagick
             } catch ( \Exception $e ) {
-                // try next candidate
+                // font not usable by Imagick – try next candidate
             }
         }
 
