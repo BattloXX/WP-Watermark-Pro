@@ -124,6 +124,7 @@ class WM_Admin {
             'opacity'          => max( 10, min( 100, absint( $_POST['opacity']  ?? 80 ) ) ),
             'save_mode'        => in_array( $_POST['save_mode'] ?? '', [ 'new', 'overwrite' ], true )
                                   ? sanitize_key( $_POST['save_mode'] ) : 'new',
+            'force'            => ! empty( $_POST['force'] ),
             // Text watermark
             'text_enabled'     => ! empty( $_POST['text_enabled'] ),
             'text_content'     => sanitize_text_field( $_POST['text_content']      ?? '' ),
@@ -142,14 +143,23 @@ class WM_Admin {
 
         $result = $this->processor->apply( $image_id, $wm_id, $settings );
         if ( is_wp_error( $result ) ) {
-            wp_send_json_error( [ 'message' => $result->get_error_message() ] );
+            $error = [ 'message' => $result->get_error_message() ];
+            $data  = $result->get_error_data();
+            if ( is_array( $data ) && ! empty( $data['requires_confirmation'] ) ) {
+                $error['requires_confirmation'] = true;
+            }
+            wp_send_json_error( $error );
         }
 
         $response = [ 'success_msg' => __( 'Wasserzeichen erfolgreich angewendet.', 'watermark-pro' ) ];
-        if ( is_int( $result ) ) {
-            $response['new_id']   = $result;
-            $response['edit_url'] = get_edit_post_link( $result, 'raw' );
-            $response['view_url'] = wp_get_attachment_url( $result );
+        if ( $result['mode'] === 'new' ) {
+            $response['new_id']   = $result['new_id'];
+            $response['edit_url'] = get_edit_post_link( $result['new_id'], 'raw' );
+            $response['view_url'] = wp_get_attachment_url( $result['new_id'] );
+        } elseif ( $result['mode'] === 'overwrite' ) {
+            $response['new_id']   = $image_id;
+            $response['edit_url'] = get_edit_post_link( $image_id, 'raw' );
+            $response['view_url'] = add_query_arg( 'wmv', $result['file_mtime'], wp_get_attachment_url( $image_id ) );
         }
         wp_send_json_success( $response );
     }

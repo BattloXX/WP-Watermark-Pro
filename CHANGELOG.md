@@ -1,5 +1,15 @@
 # Changelog – Watermark Pro
 
+## 1.3.0 — 2026-09-29
+
+### Bug Fixes
+- **Overwrite result is now verifiable:** Overwrite mode returns a cache-busted result link so the newly watermarked image is immediately visible.
+- **Confirmation before re-applying:** Re-applying a watermark to an already-watermarked image in overwrite mode now asks for confirmation instead of silently double-stamping it.
+- **Double-submit protection:** Added a short-lived per-image processing lock to prevent concurrent processing races.
+
+### Changes
+- **Explicit overwrite warning:** Overwrite mode is no longer silently restored across page loads and now shows a warning plus confirmation before processing.
+
 ## 1.2.0 — 2026-04-05
 
 ### Bug Fixes

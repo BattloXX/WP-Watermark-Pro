@@ -241,6 +241,7 @@
                                 <option value="new"><?php       esc_html_e( 'Neue Datei erstellen (Original behalten)', 'watermark-pro' ); ?></option>
                                 <option value="overwrite"><?php esc_html_e( 'Original überschreiben',                   'watermark-pro' ); ?></option>
                             </select>
+                            <p id="wm-save-mode-warning" class="wm-hint" style="display: none;"><?php esc_html_e( 'Achtung: überschreibt die Originaldatei unwiderruflich. Die Mediathek-Übersicht kann weiterhin ein altes Vorschaubild zeigen, bis der Browser-Cache geleert wird.', 'watermark-pro' ); ?></p>
                         </div>
 
                         <hr class="wm-divider">
