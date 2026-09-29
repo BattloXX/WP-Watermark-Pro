@@ -70,13 +70,30 @@ class WM_Processor {
      * @param  int   $image_id   Base image attachment ID.
      * @param  int   $wm_id      Image watermark attachment ID (0 = text only).
      * @param  array $settings   See inline docs.
-     * @return int|true|WP_Error New attachment ID, true (overwrite), or error.
+     * @return array|WP_Error Processing result or error.
      */
-    public function apply( int $image_id, int $wm_id, array $settings ): int|bool|WP_Error {
+    public function apply( int $image_id, int $wm_id, array $settings ): array|WP_Error {
         if ( ! extension_loaded( 'gd' ) ) {
             return new WP_Error( 'no_gd', __( 'Die PHP GD-Erweiterung ist nicht verfügbar.', 'watermark-pro' ) );
         }
 
+        $lock_key = 'wm_pro_lock_' . $image_id;
+        if ( get_transient( $lock_key ) ) {
+            return new WP_Error( 'locked', __( 'Dieses Bild wird bereits verarbeitet. Bitte kurz warten.', 'watermark-pro' ) );
+        }
+
+        set_transient( $lock_key, 1, 30 );
+        try {
+            return $this->apply_locked( $image_id, $wm_id, $settings );
+        } finally {
+            delete_transient( $lock_key );
+        }
+    }
+
+    /**
+     * Apply a watermark while the attachment-specific processing lock is held.
+     */
+    private function apply_locked( int $image_id, int $wm_id, array $settings ): array|WP_Error {
         @ini_set( 'max_execution_time', '120' );
         @ini_set( 'memory_limit', '256M' );
 
@@ -85,6 +102,13 @@ class WM_Processor {
 
         if ( ! $has_image_wm && ! $has_text_wm ) {
             return new WP_Error( 'nothing_to_do', __( 'Kein Wasserzeichen konfiguriert.', 'watermark-pro' ) );
+        }
+
+        $force     = ! empty( $settings['force'] );
+        $save_mode = $this->normalize_save_mode( $settings );
+        $prior     = get_post_meta( $image_id, '_wm_pro_applied', true );
+        if ( ! $force && $save_mode === 'overwrite' && is_array( $prior ) && ! empty( $prior ) ) {
+            return new WP_Error( 'already_watermarked', __( 'Auf dieses Bild wurde bereits ein Wasserzeichen angewendet.', 'watermark-pro' ), [ 'requires_confirmation' => true ] );
         }
 
         // Load base image
@@ -191,7 +215,6 @@ class WM_Processor {
         }
 
         // ---- Save ----
-        $save_mode = $settings['save_mode'] === 'overwrite' ? 'overwrite' : 'new';
         $out_path  = $save_mode === 'overwrite' ? $base_path : $this->generate_new_path( $base_path );
 
         $saved = $this->save_image( $base, $out_path, $ext );
@@ -207,10 +230,41 @@ class WM_Processor {
                 $image_id,
                 wp_generate_attachment_metadata( $image_id, $base_path )
             );
-            return true;
+            update_post_meta( $image_id, '_wm_pro_applied', [
+                'wm_id'         => $wm_id,
+                'settings_hash' => md5( wp_json_encode( $settings ) ),
+                'save_mode'     => $save_mode,
+                'applied_at'    => time(),
+                'output_id'     => $image_id,
+            ] );
+            clearstatcache( true, $base_path );
+            return [
+                'mode'       => 'overwrite',
+                'image_id'   => $image_id,
+                'file_mtime' => filemtime( $base_path ),
+            ];
         }
 
-        return $this->register_attachment( $out_path, $image_id );
+        $new_id = $this->register_attachment( $out_path, $image_id );
+        if ( is_wp_error( $new_id ) ) {
+            return $new_id;
+        }
+
+        update_post_meta( $image_id, '_wm_pro_applied', [
+            'wm_id'         => $wm_id,
+            'settings_hash' => md5( wp_json_encode( $settings ) ),
+            'save_mode'     => $save_mode,
+            'applied_at'    => time(),
+            'output_id'     => $new_id,
+        ] );
+        return [
+            'mode'   => 'new',
+            'new_id' => $new_id,
+        ];
+    }
+
+    private function normalize_save_mode( array $settings ): string {
+        return $settings['save_mode'] === 'overwrite' ? 'overwrite' : 'new';
     }
 
     /**

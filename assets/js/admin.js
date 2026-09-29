@@ -397,7 +397,14 @@
         updatePreview();
     });
 
-    $('#wm-save-mode').on('change', function () { state.saveMode = this.value; });
+    function updateSaveModeWarning() {
+        $('#wm-save-mode-warning').toggle(state.saveMode === 'overwrite');
+    }
+
+    $('#wm-save-mode').on('change', function () {
+        state.saveMode = this.value;
+        updateSaveModeWarning();
+    });
 
     // =========================================================================
     // Text watermark controls
@@ -613,6 +620,9 @@
             alert('Bitte ein Bild-Wasserzeichen auswählen oder Bild-Wasserzeichen deaktivieren.');
             return;
         }
+        if (state.saveMode === 'overwrite' && !window.confirm('Achtung: ' + state.images.length + ' Originalbild' + (state.images.length > 1 ? 'er' : '') + ' wird unwiderruflich überschrieben. Fortfahren?')) {
+            return;
+        }
 
         var $btn    = $(this).prop('disabled', true);
         var $wrap   = $('#wm-progress-wrap').show();
@@ -645,20 +655,40 @@
             // override nonce (already included) and add image-specific fields
             delete data.name;
 
-            $.post(wmPro.ajaxUrl, data, function (res) {
-                if (res.success) { saveStateToStorage(); }
-                results.push(res.success
-                    ? { ok: true,  title: img.title, data: res.data }
-                    : { ok: false, title: img.title, message: (res.data && res.data.message) || wmPro.i18n.errorApply }
-                );
+            function completeResult(result) {
+                results.push(result);
                 done++;
                 $bar.css('width', Math.round((done / total) * 100) + '%');
                 processNext(index + 1);
-            }).fail(function () {
-                results.push({ ok: false, title: img.title, message: wmPro.i18n.errorApply });
-                done++;
-                processNext(index + 1);
-            });
+            }
+
+            function handleApplyResponse(res) {
+                if (res.success) { saveStateToStorage(); }
+                if (res.success) {
+                    completeResult({ ok: true, title: img.title, data: res.data });
+                    return;
+                }
+                if (res.data && res.data.requires_confirmation && !data.force) {
+                    if (window.confirm('Für „' + img.title + '“ wurde bereits ein Wasserzeichen angewendet. Erneut anwenden?')) {
+                        data.force = 1;
+                        sendApplyRequest(data);
+                    } else {
+                        completeResult({ ok: false, skipped: true, title: img.title, message: 'Übersprungen, bereits angewendet.' });
+                    }
+                    return;
+                }
+                completeResult({ ok: false, title: img.title, message: (res.data && res.data.message) || wmPro.i18n.errorApply });
+            }
+
+            function handleApplyFailure() {
+                completeResult({ ok: false, title: img.title, message: wmPro.i18n.errorApply });
+            }
+
+            function sendApplyRequest(requestData) {
+                $.post(wmPro.ajaxUrl, requestData, handleApplyResponse).fail(handleApplyFailure);
+            }
+
+            sendApplyRequest(data);
         }
         processNext(0);
     });
@@ -666,7 +696,8 @@
     function renderResults(results) {
         var $res      = $('#wm-apply-result').empty();
         var successes = $.grep(results, function (r) { return  r.ok; });
-        var errors    = $.grep(results, function (r) { return !r.ok; });
+        var skipped   = $.grep(results, function (r) { return !r.ok && r.skipped; });
+        var errors    = $.grep(results, function (r) { return !r.ok && !r.skipped; });
 
         if (successes.length) {
             var $ok = $('<div class="wm-success">').appendTo($res);
@@ -677,6 +708,12 @@
                     $ok.append(' ');
                 }
             });
+        }
+        if (skipped.length) {
+            var $skip = $('<div class="wm-skip">').appendTo($res);
+            $skip.append('– ' + skipped.length + ' Bild' + (skipped.length > 1 ? 'er' : '') + ' übersprungen (bereits angewendet):');
+            var $skipUl = $('<ul>').appendTo($skip);
+            $.each(skipped, function (i, r) { $('<li>').text(r.title).appendTo($skipUl); });
         }
         if (errors.length) {
             var $err = $('<div class="wm-error">').appendTo($res);
@@ -796,6 +833,7 @@
         try {
             var snapshot = $.extend({}, state);
             delete snapshot.images;   // do not persist image selection
+            delete snapshot.saveMode;
             localStorage.setItem(LS_KEY, JSON.stringify(snapshot));
         } catch (e) { /* storage not available */ }
     }
@@ -806,6 +844,7 @@
             if (!raw) { return; }
             var saved = JSON.parse(raw);
             if (typeof saved !== 'object' || saved === null) { return; }
+            delete saved.saveMode;
 
             // Merge saved values into state (images is not persisted)
             $.extend(state, saved);
@@ -825,8 +864,6 @@
             $('#wm-offset-y').val(state.offsetY);
             $('#wm-size').val(state.sizePct);         $('#wm-size-val').text(state.sizePct);
             $('#wm-opacity').val(state.opacity);      $('#wm-opacity-val').text(state.opacity);
-            $('#wm-save-mode').val(state.saveMode);
-
             $('#wm-text-content').val(state.textContent);
             $('#wm-text-position').val(state.textPosition);
             $('#wm-text-font-family').val(state.textFontFamily);
@@ -874,6 +911,7 @@
 
         $('#wm-image-wm-settings, #wm-image-wm-controls').toggle(state.imageWmEnabled);
         $('#wm-text-settings').toggle(state.textEnabled);
+        updateSaveModeWarning();
     }());
 
     // Restore last-used settings from localStorage (overwrites DOM defaults)

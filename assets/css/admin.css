@@ -565,6 +565,8 @@
 
 .wm-apply-result .wm-success { color: #00a32a; }
 .wm-apply-result .wm-success a { color: #007017; text-decoration: underline; }
+.wm-apply-result .wm-skip   { color: #8c8f94; }
+.wm-apply-result .wm-skip ul { margin: 4px 0 0 16px; list-style: disc; }
 .wm-apply-result .wm-error  { color: #d63638; }
 .wm-apply-result .wm-error ul { margin: 4px 0 0 16px; list-style: disc; }
 
