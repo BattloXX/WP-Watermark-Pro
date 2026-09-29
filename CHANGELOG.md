@@ -1,5 +1,10 @@
 # Changelog – Watermark Pro
 
+## 1.3.1 — 2026-09-29
+
+### Fixes
+- **Release-Paketierung automatisiert:** Releases werden jetzt per GitHub Actions gebaut und veröffentlicht, statt manuell lokal gepackt zu werden. Der Build bricht ab, falls Git-Tag, `Version:`-Header und `WM_VERSION`-Konstante nicht exakt übereinstimmen, und prüft zusätzlich, dass das gebaute ZIP an der erwarteten Stelle (`watermark-pro/watermark-pro.php`) einen gültigen Plugin-Header enthält. Das behebt die Ursache dafür, dass Version 1.2.1 nie in den Plugin-Header übernommen wurde (siehe unten) und künftige Releases nicht mehr aktivierbar sein könnten.
+
 ## 1.3.0 — 2026-09-29
 
 ### Bug Fixes
@@ -9,6 +14,13 @@
 
 ### Changes
 - **Explicit overwrite warning:** Overwrite mode is no longer silently restored across page loads and now shows a warning plus confirmation before processing.
+
+## 1.2.1 — 2026-04-11
+
+### Bug Fixes
+- **Text-Wasserzeichen auf FreeBSD:** Imagick-Fallback für Text-Rendering schlug auf FreeBSD/PHP-FPM fehl, obwohl GD/FreeType und Imagick laut `phpinfo()` aktiv waren. `resolve_font_for_imagick()` validiert Fonts jetzt mit einem echten `queryFontMetrics()`-Test statt nur `setFont()`, und `apply_text_watermark_imagick()` wiederholt bei einem font-bedingten Fehler automatisch ohne expliziten Font.
+
+*Hinweis: Dieser Eintrag wurde nachträglich ergänzt — das damalige Release trug zwar den Tag `v1.2.1`, der `Version:`-Header in `watermark-pro.php` wurde aber nicht mit hochgezählt und zeigte weiterhin `1.2.0`. Ab 1.3.1 verhindert die automatisierte Release-Pipeline (siehe oben) genau diese Inkonsistenz.*
 
 ## 1.2.0 — 2026-04-05
 
