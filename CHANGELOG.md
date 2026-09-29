@@ -1,5 +1,10 @@
 # Changelog – Watermark Pro
 
+## 1.3.2 — 2026-09-29
+
+### Fixes
+- **Release-ZIP schlanker:** `.github/` (CI-Workflow) landete durch die neue automatisierte Pipeline versehentlich mit im Plugin-ZIP. Per `.gitattributes` (`export-ignore`) jetzt aus dem Release-Paket ausgeschlossen.
+
 ## 1.3.1 — 2026-09-29
 
 ### Fixes
